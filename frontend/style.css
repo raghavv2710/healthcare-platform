@@ -1,0 +1,112 @@
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f4f8;
+    color: #333;
+}
+
+/* Landing Page Styles */
+.landing-page {
+    background-color: #4CAF50;
+    color: white;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.landing-content {
+    text-align: center;
+}
+.landing-content h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+.landing-content p {
+    font-size: 1.25rem;
+    margin-bottom: 30px;
+}
+.cta-btn {
+    background-color: #ffffff;
+    color: #4CAF50;
+    padding: 15px 30px;
+    font-size: 1.25rem;
+    text-decoration: none;
+    border-radius: 25px;
+    transition: background-color 0.3s;
+}
+.cta-btn:hover {
+    background-color: #45a049;
+}
+
+
+/* Dashboard Styles */
+.dashboard {
+    width: 100%;
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+header h1 {
+    font-size: 2rem;
+}
+header button {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 1rem;
+    border-radius: 5px;
+}
+header button:hover {
+    background-color: #d32f2f;
+}
+.appointments {
+    margin-top: 20px;
+}
+.appointment {
+    background-color: #f4f4f4;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.appointment p {
+    margin: 5px 0;
+}
+
+/* Modern Logout Button */
+.btn-logout {
+  background-color: #007bff; /* Solid blue background */
+  color: #fff;
+  border: none;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 0.9rem; /* Match the font size of "View Now" button */
+  padding: 10px 20px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-logout:hover {
+  background-color: #0056b3; /* Darker blue on hover */
+  color: #fff;
+  transform: translateY(-3px); /* Slight upward movement */
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2); /* Add shadow on hover */
+}
+
+
+
