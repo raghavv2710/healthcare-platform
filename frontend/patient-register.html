@@ -79,48 +79,53 @@
   </div>
 
   <script>
-    // Fetch Firebase configuration and initialize Firebase
-    fetch('http://localhost:5001/firebase-config')
-      .then(response => response.json())
-      .then(firebaseConfig => {
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+  fetch('http://localhost:5001/firebase-config')
+    .then(response => response.json())
+    .then(firebaseConfig => {
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
 
-        const registerForm = document.getElementById("registerForm");
-        const errorMsg = document.getElementById("error-msg");
+      const registerForm = document.getElementById("registerForm");
+      const errorMsg = document.getElementById("error-msg");
 
-        registerForm.addEventListener("submit", async (e) => {
-          e.preventDefault();
-          errorMsg.classList.add("d-none");
-          errorMsg.textContent = "";
+      registerForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorMsg.classList.add("d-none");
+        errorMsg.textContent = "";
 
-          const name = document.getElementById("name").value;
-          const email = document.getElementById("email").value;
-          const password = document.getElementById("password").value;
+        const name = document.getElementById("name").value;
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
 
-          try {
-            const result = await firebase.auth().createUserWithEmailAndPassword(email, password);
-            const user = result.user;
-            await db.collection("patients").doc(user.uid).set({
-              name: name,
-              email: email,
-              role: "patient",
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+        try {
+          const result = await firebase.auth().createUserWithEmailAndPassword(email, password);
+          const user = result.user;
 
-            const token = await user.getIdToken();
-            localStorage.setItem("token", token);
-            window.location.href = "patient-dashboard.html";
-          } catch (error) {
-            errorMsg.textContent = error.message;
-            errorMsg.classList.remove("d-none");
-          }
-        });
-      })
-      .catch(error => {
-        console.error('Error fetching Firebase config:', error);
-        alert('Failed to load the application. Please try again later.');
+          // Update the user's displayName
+          await user.updateProfile({
+            displayName: name
+          });
+
+          // Save the user's data to Firestore
+          await db.collection("patients").doc(user.uid).set({
+            name: name,
+            email: email,
+            role: "patient",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          await firebase.auth().signOut();
+          alert("Registration successful! Please log in to continue.");
+          window.location.href = "patient-login.html";
+        } catch (error) {
+          errorMsg.textContent = error.message;
+          errorMsg.classList.remove("d-none");
+        }
       });
+    })
+    .catch(error => {
+      alert('Failed to load the application. Please try again later.');
+    });
   </script>
 </body>
 </html>

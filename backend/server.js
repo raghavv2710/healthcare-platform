@@ -1,6 +1,5 @@
 // backend/server.js
 
-// Load dependencies
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
@@ -15,67 +14,114 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: "https://healthcare-platform-a09b8.firebaseio.com"
 });
-
 const db = admin.firestore();
 
-// Route to book an appointment
-app.post('/book-appointment', async (req, res) => {
-  const { doctorId, patientName, date, time } = req.body;
+// 1) Return Firebase client config
+app.get('/firebase-config', (req, res) => {
+  res.json({
+    apiKey: "AIzaSyB5gBk_3WjEE5HdlpT_qnquQYJUAJN6vmc",
+    authDomain: "healthcare-platform-a09b8.firebaseapp.com",
+    projectId: "healthcare-platform-a09b8",
+    storageBucket: "healthcare-platform-a09b8.appspot.com",
+    messagingSenderId: "159575142942",
+    appId: "1:159575142942:web:f1bec02a9b46910531f40f",
+    measurementId: "G-D2PT6VT8EC"
+  });
+});
 
+// 2) List all doctors
+app.get('/doctors', async (req, res) => {
   try {
-    // Validate input
-    if (!doctorId || !patientName || !date || !time) {
-      return res.status(400).json({ error: 'All fields (doctorId, patientName, date, time) are required.' });
-    }
-
-    // Check if the date is within the next 4 days
-    const today = new Date();
-    const bookingDate = new Date(date);
-    const maxBookingDate = new Date(today);
-    maxBookingDate.setDate(today.getDate() + 4);
-
-    if (bookingDate < today || bookingDate > maxBookingDate) {
-      return res.status(400).json({ error: 'You can only book appointments within the next 4 days.' });
-    }
-
-    // Check if the time slot is already booked
-    const existingAppointment = await db.collection('appointments')
-      .where('doctorId', '==', doctorId)
-      .where('date', '==', date)
-      .where('time', '==', time)
-      .get();
-
-    if (!existingAppointment.empty) {
-      return res.status(400).json({ error: `The time slot ${time} on ${date} is already booked.` });
-    }
-
-    // Create a new appointment
-    const appointmentRef = db.collection('appointments').doc();
-    await appointmentRef.set({
-      doctorId,
-      patientName,
-      date,
-      time,
-      status: 'Confirmed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    res.status(200).json({ message: 'Appointment booked successfully' });
-  } catch (error) {
-    console.error('Error in /book-appointment:', error);
+    const snap = await db.collection('doctors').get();
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(docs);
+  } catch (err) {
+    console.error('Error fetching doctors:', err);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-app.get('/', (req, res) => {
-  res.send('Welcome to the Healthcare Backend API');
+// 3) Book an appointment
+app.post('/book-appointment', async (req, res) => {
+  const { doctorId, patientId, patientName, doctorName, date, time } = req.body;
+  if (!doctorId || !patientId || !patientName || !doctorName || !date || !time) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+  try {
+    // Prevent double-booking
+    const exists = await db.collection('appointments')
+      .where('doctorId', '==', doctorId)
+      .where('date', '==', date)
+      .where('time', '==', time)
+      .get();
+    if (!exists.empty) {
+      return res.status(400).json({ error: `Slot ${time} on ${date} already booked.` });
+    }
+    const appointment = {
+      doctorId,
+      patientId,
+      patientName,
+      doctorName,
+      date,
+      time,
+      status: 'Confirmed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    await db.collection('appointments').add(appointment);
+    res.json({ message: 'Appointment booked successfully', appointment });
+  } catch (err) {
+    console.error('Error booking appointment:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
-const firebaseConfigRoute = require('./routes/firebase-config');
-app.use('/', firebaseConfigRoute);
+// 4) Get all appointments for a patient
+app.get('/appointments/patient/:patientId', async (req, res) => {
+  const { patientId } = req.params;
 
-// Start the server
-const PORT = process.env.PORT || 5001; // Change to 5001
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  try {
+    const appointmentsSnapshot = await db.collection('appointments')
+      .where('patientId', '==', patientId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    if (appointmentsSnapshot.empty) {
+      return res.status(200).json([]); // Return an empty array if no appointments are found
+    }
+
+    const appointments = appointmentsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.status(200).json(appointments);
+  } catch (error) {
+    console.error('Error fetching patient appointments:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
+
+// 5) Get appointments for a doctor
+app.get('/appointments/:doctorId', async (req, res) => {
+  const { doctorId } = req.params;
+  try {
+    const snap = await db.collection('appointments')
+      .where('doctorId', '==', doctorId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    if (snap.empty) {
+      return res.status(200).json([]); // Return an empty array if no appointments are found
+    }
+
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(list);
+  } catch (err) {
+    console.error('Error fetching doctor appointments:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Start server
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
