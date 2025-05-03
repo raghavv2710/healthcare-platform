@@ -220,11 +220,16 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script>
-
-  if (performance.getEntriesByType("navigation")[0].type === "back_forward") {
-    location.replace('index.html');
-  }
-
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) {
+        firebase.auth().onAuthStateChanged((user) => {
+          if (!user) {
+            window.location.href = 'index.html';
+          }
+        });
+      }
+    });
+  
     document.addEventListener('DOMContentLoaded', () => {
       fetch('http://localhost:5001/firebase-config')
         .then(response => response.json())
@@ -238,124 +243,128 @@
           auth.onAuthStateChanged((user) => {
             if (!user) {
               console.warn('User not authenticated. Redirecting to home page...');
-              window.location.href = 'index.html';  // Redirect to landing page immediately
+              window.location.href = 'index.html';
               return;
             }
-  
-            console.log('Authenticated user:', user.uid);
   
             // Fetch patient's name
             db.collection('patients').doc(user.uid).get()
               .then((doc) => {
                 if (doc.exists) {
-                  const patientData = doc.data();
-                  document.getElementById('patient-name').textContent = patientData.name || 'Patient';
+                  document.getElementById('patient-name').textContent = doc.data().name || 'Patient';
                 }
               })
-              .catch(error => {
-                console.error('Error fetching patient name:', error);
-              });
+              .catch(console.error);
   
-            // Handle specialization change
+            // Elements
             const specializationSelect = document.getElementById('specialization');
-            const doctorSelect = document.getElementById('doctor');
-            const loadingSpinner = document.getElementById('doctor-loading');
+            const doctorSelect         = document.getElementById('doctor');
+            const loadingSpinner       = document.getElementById('doctor-loading');
+            const dateInput            = document.getElementById('day');
+            const timeSelect           = document.getElementById('time');
   
-            specializationSelect.addEventListener('change', async (event) => {
-              const specialization = event.target.value;
-              doctorSelect.innerHTML = '<option value="" disabled selected>Loading doctors...</option>';
+            // Helper: disable already booked slots
+            async function refreshTimeSlots() {
+              const doctorId = doctorSelect.value;
+              const date     = dateInput.value;
+              // first, enable all options
+              Array.from(timeSelect.options).forEach(opt => opt.disabled = false);
+              if (!doctorId || !date) return;
+              // fetch existing appts
+              const snap = await db.collection('appointments')
+                .where('doctorId','==',doctorId)
+                .where('date','==',date)
+                .get();
+              snap.forEach(doc => {
+                const bookedTime = doc.data().time;
+                const opt = Array.from(timeSelect.options).find(o=>o.value===bookedTime);
+                if (opt) opt.disabled = true;
+              });
+            }
+  
+            // Handle specialization change -> load doctors
+            specializationSelect.addEventListener('change', async (e) => {
+              const spec = e.target.value;
+              doctorSelect.innerHTML = '<option disabled selected>Loading doctors...</option>';
               loadingSpinner.style.display = 'inline-block';
-  
               try {
-                const doctorsSnapshot = await db.collection('doctors')
-                  .where('specialization', '==', specialization)
+                const snap = await db.collection('doctors')
+                  .where('specialization','==', spec)
                   .get();
-  
-                doctorSelect.innerHTML = '<option value="" disabled selected>Select Doctor</option>';
-                if (doctorsSnapshot.empty) {
-                  doctorSelect.innerHTML = '<option value="" disabled>No doctors available</option>';
+                doctorSelect.innerHTML = '<option disabled selected>Select Doctor</option>';
+                if (snap.empty) {
+                  doctorSelect.innerHTML = '<option disabled>No doctors available</option>';
                 } else {
-                  doctorsSnapshot.forEach(doc => {
-                    const doctor = doc.data();
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    option.textContent = `${doctor.name} (${doctor.availability.join(', ')})`;
-                    doctorSelect.appendChild(option);
+                  snap.forEach(d => {
+                    const doc = d.data();
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = `${doc.name} (${doc.availability.join(', ')})`;
+                    doctorSelect.appendChild(opt);
                   });
                 }
-              } catch (error) {
-                console.error('Error fetching doctors:', error);
-                doctorSelect.innerHTML = '<option value="" disabled>Failed to load doctors</option>';
+              } catch (err) {
+                console.error(err);
+                doctorSelect.innerHTML = '<option disabled>Failed to load doctors</option>';
               } finally {
                 loadingSpinner.style.display = 'none';
               }
             });
   
-            // Restrict date selection (from tomorrow up to next 5 days)
-            const dateInput = document.getElementById('day');
+            // When doctor or date changes, refresh time slots
+            doctorSelect.addEventListener('change', refreshTimeSlots);
+            dateInput.addEventListener('change', refreshTimeSlots);
+  
+            // Restrict date selection to tomorrow–5 days ahead
             const today = new Date();
-            const formatDate = (date) => {
-              const year = date.getFullYear();
-              const month = String(date.getMonth() + 1).padStart(2, '0');
-              const day = String(date.getDate()).padStart(2, '0');
-              return `${year}-${month}-${day}`;
+            const formatDate = d => {
+              const y = d.getFullYear(),
+                    m = String(d.getMonth()+1).padStart(2,'0'),
+                    dd = String(d.getDate()).padStart(2,'0');
+              return `${y}-${m}-${dd}`;
             };
-            const minDate = new Date(today);
-            minDate.setDate(today.getDate() + 1);
-            const maxDate = new Date(today);
-            maxDate.setDate(today.getDate() + 5);
+            const min = new Date(today); min.setDate(min.getDate()+1);
+            const max = new Date(today); max.setDate(max.getDate()+5);
+            dateInput.min = formatDate(min);
+            dateInput.max = formatDate(max);
   
-            dateInput.setAttribute('min', formatDate(minDate));
-            dateInput.setAttribute('max', formatDate(maxDate));
-  
-            // Book appointment form submission
+            // Book appointment
             document.getElementById('appointmentForm').addEventListener('submit', async (e) => {
               e.preventDefault();
-  
-              const specialization = specializationSelect.value;
               const doctorId = doctorSelect.value;
-              const date = dateInput.value;
-              const time = document.getElementById('time').value;
-  
-              if (!specialization || !doctorId || !date || !time) {
-                alert('All fields are required.');
-                return;
+              const date     = dateInput.value;
+              const time     = timeSelect.value;
+              if (!specializationSelect.value || !doctorId || !date || !time) {
+                return alert('All fields are required.');
               }
   
               try {
                 const doctorDoc = await db.collection('doctors').doc(doctorId).get();
-                if (!doctorDoc.exists) {
-                  alert('Selected doctor does not exist.');
-                  return;
-                }
-  
-                const doctorName = doctorDoc.data().name;
+                if (!doctorDoc.exists) return alert('Selected doctor does not exist.');
   
                 const patientDoc = await db.collection('patients').doc(user.uid).get();
-                const patientName = patientDoc.data().name;
+                const payload = {
+                  doctorId,
+                  patientId:   user.uid,
+                  patientName: patientDoc.data().name,
+                  doctorName:  doctorDoc.data().name,
+                  date, time
+                };
   
-                const response = await fetch('http://localhost:5001/book-appointment', {
+                const resp = await fetch('http://localhost:5001/book-appointment', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    doctorId,
-                    patientId: user.uid,
-                    patientName,
-                    doctorName,
-                    date,
-                    time
-                  })
+                  headers: {'Content-Type':'application/json'},
+                  body: JSON.stringify(payload)
                 });
-  
-                if (response.ok) {
+                if (resp.ok) {
                   alert('Appointment booked successfully.');
                   window.location.reload();
                 } else {
-                  const errorData = await response.json();
-                  alert(errorData.error || 'Failed to book appointment.');
+                  const err = await resp.json();
+                  alert(err.error||'Failed to book appointment.');
                 }
-              } catch (error) {
-                console.error('Error booking appointment:', error);
+              } catch (err) {
+                console.error(err);
                 alert('Failed to book appointment. Please try again.');
               }
             });
@@ -369,25 +378,20 @@
     });
   
     function openAppointmentModal() {
-      const modal = new bootstrap.Modal(document.getElementById('appointmentModal'));
-      modal.show();
+      new bootstrap.Modal(document.getElementById('appointmentModal')).show();
     }
   
     function logout() {
       firebase.auth().signOut()
-        .then(() => {
-          window.location.href = 'index.html';  // 👉 Redirect to landing page after logout
-        })
-        .catch((error) => {
-          console.error('Error logging out:', error);
-          alert('Failed to log out. Please try again.');
-        });
+        .then(() => { window.location.href = 'index.html'; })
+        .catch(err => { console.error(err); alert('Failed to log out.'); });
     }
   
     function viewPrescriptions() {
       window.location.href = 'patient-prescriptions.html';
     }
-  </script>  
+  </script>
+    
     
 </body>
 </html>
