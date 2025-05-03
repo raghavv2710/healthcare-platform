@@ -122,6 +122,32 @@ app.get('/appointments/:doctorId', async (req, res) => {
   }
 });
 
+// 6) Publish a prescription (now via backend)
+app.post('/prescriptions', async (req, res) => {
+  const { patientId, patientName, doctorId, doctorName, content } = req.body;
+  if (!patientId || !patientName || !doctorId || !doctorName || !content) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+  try {
+    const data = {
+      patientId,
+      patientName,
+      doctorId,
+      doctorName,
+      content,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+      )
+    };
+    const docRef = await db.collection('prescriptions').add(data);
+    res.json({ message: 'Prescription published successfully', id: docRef.id });
+  } catch (err) {
+    console.error('Error publishing prescription:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
