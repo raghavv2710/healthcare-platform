@@ -293,23 +293,24 @@
                   .get();
                 doctorSelect.innerHTML = '<option disabled selected>Select Doctor</option>';
                 if (snap.empty) {
-                  doctorSelect.innerHTML = '<option disabled>No doctors available</option>';
+                  doctorSelect.innerHTML = '<option disabled selected>No doctors found</option>';
                 } else {
-                  snap.forEach(d => {
-                    const doc = d.data();
-                    const opt = document.createElement('option');
-                    opt.value = d.id;
-                    opt.textContent = `${doc.name} (${doc.availability.join(', ')})`;
-                    doctorSelect.appendChild(opt);
+                  snap.forEach(doc => {
+                    const doctor = doc.data();
+                    const option = document.createElement('option');
+                    option.value = doc.id; // Assuming you're using Firestore document ID as doctorId
+                    option.textContent = doctor.name;
+                    doctorSelect.appendChild(option);
                   });
                 }
-              } catch (err) {
-                console.error(err);
-                doctorSelect.innerHTML = '<option disabled>Failed to load doctors</option>';
-              } finally {
-                loadingSpinner.style.display = 'none';
-              }
-            });
+                } catch (error) {
+                  console.error('Error loading doctors:', error);
+                  doctorSelect.innerHTML = '<option disabled selected>Error loading doctors</option>';
+                } finally {
+                  loadingSpinner.style.display = 'none';
+                }
+                });
+
   
             // When doctor or date changes, refresh time slots
             doctorSelect.addEventListener('change', refreshTimeSlots);

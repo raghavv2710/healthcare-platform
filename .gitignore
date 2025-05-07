@@ -1,4 +1,3 @@
-
 # Node.js dependencies
 node_modules/
 npm-debug.log*
@@ -37,3 +36,6 @@ build/
 
 # Cache
 .cache/
+
+# Test files
+test.txt
