@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Firebase Admin SDK service account key
-backend/firebaseServiceAccountKey.json
+# backend/firebaseServiceAccountKey.json (insert your unique "firebaseServiceAccountKey.json" key)
 
 # Logs
 logs/
